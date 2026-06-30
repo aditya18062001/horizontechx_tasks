@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>FAQ Bot — Ask Anything</title>
+<style>
+  :root{
+    --bg:#0f1419;
+    --panel:#161c24;
+    --bubble-bot:#1f2733;
+    --bubble-user:#2d5d4f;
+    --accent:#4fd1a5;
+    --accent-dim:#2f7a5e;
+    --text:#e8ecef;
+    --muted:#8b96a3;
+    --border:#26303c;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--text);
+    font-family:'Inter','Helvetica Neue',Arial,sans-serif;
+    min-height:100vh;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    padding:30px 16px;
+  }
+  .app{
+    width:100%;
+    max-width:560px;
+    background:var(--panel);
+    border:1px solid var(--border);
+    border-radius:14px;
+    overflow:hidden;
+    display:flex;
+    flex-direction:column;
+    height:88vh;
+    max-height:760px;
+  }
+  header{
+    padding:18px 20px;
+    border-bottom:1px solid var(--border);
+    display:flex;
+    align-items:center;
+    gap:12px;
+  }
+  .avatar{
+    width:38px;
+    height:38px;
+    border-radius:50%;
+    background:linear-gradient(135deg,var(--accent),var(--accent-dim));
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    font-size:18px;
+    flex-shrink:0;
+  }
+  .htext h1{
+    font-size:15px;
+    margin:0;
+    font-weight:600;
+  }
+  .htext .status{
+    font-size:12px;
+    color:var(--accent);
+    display:flex;
+    align-items:center;
+    gap:5px;
+  }
+  .status::before{
+    content:'';
+    width:7px;
+    height:7px;
+    border-radius:50%;
+    background:var(--accent);
+    display:inline-block;
+  }
+
+  .messages{
+    flex:1;
+    overflow-y:auto;
+    padding:18px;
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+  }
+  .messages::-webkit-scrollbar{ width:6px; }
+  .messages::-webkit-scrollbar-thumb{ background:var(--border); border-radius:3px; }
+
+  .msg{
+    max-width:80%;
+    padding:10px 14px;
+    border-radius:14px;
+    font-size:14px;
+    line-height:1.5;
+    white-space:pre-wrap;
+  }
+  .msg.bot{
+    align-self:flex-start;
+    background:var(--bubble-bot);
+    border-bottom-left-radius:4px;
+  }
+  .msg.user{
+    align-self:flex-end;
+    background:var(--bubble-user);
+    border-bottom-right-radius:4px;
+  }
+  .msg.bot .conf{
+    display:block;
+    margin-top:6px;
+    font-size:11px;
+    color:var(--muted);
+  }
+  .suggestions{
+    align-self:flex-start;
+    display:flex;
+    flex-wrap:wrap;
+    gap:6px;
+    max-width:90%;
+  }
+  .chip{
+    font-size:12px;
+    padding:6px 11px;
+    border-radius:14px;
+    border:1px solid var(--border);
+    background:transparent;
+    color:var(--muted);
+    cursor:pointer;
+    transition:all 0.15s ease;
+  }
+  .chip:hover{
+    border-color:var(--accent);
+    color:var(--accent);
+  }
+
+  .typing{
+    align-self:flex-start;
+    background:var(--bubble-bot);
+    padding:12px 16px;
+    border-radius:14px;
+    border-bottom-left-radius:4px;
+    display:flex;
+    gap:4px;
+  }
+  .typing span{
+    width:6px; height:6px;
+    background:var(--muted);
+    border-radius:50%;
+    animation:blink 1.2s infinite ease-in-out;
+  }
+  .typing span:nth-child(2){ animation-delay:0.2s; }
+  .typing span:nth-child(3){ animation-delay:0.4s; }
+  @keyframes blink{ 0%,80%,100%{opacity:0.3;} 40%{opacity:1;} }
+
+  form{
+    display:flex;
+    gap:8px;
+    padding:14px;
+    border-top:1px solid var(--border);
+  }
+  input[type=text]{
+    flex:1;
+    background:#0c1116;
+    border:1px solid var(--border);
+    color:var(--text);
+    padding:11px 14px;
+    border-radius:10px;
+    font-size:14px;
+    font-family:inherit;
+  }
+  input[type=text]:focus{
+    outline:none;
+    border-color:var(--accent);
+  }
+  button.send{
+    background:var(--accent);
+    border:none;
+    color:#06291c;
+    font-weight:600;
+    padding:0 18px;
+    border-radius:10px;
+    cursor:pointer;
+    font-size:14px;
+  }
+  button.send:hover{ background:#6fe0b8; }
+  button.send:disabled{ background:var(--border); color:var(--muted); cursor:default; }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="avatar">🤖</div>
+    <div class="htext">
+      <h1>Support FAQ Bot</h1>
+      <div class="status">Online — answers from our help docs</div>
+    </div>
+  </header>
+  <div class="messages" id="messages"></div>
+  <form id="chatForm">
+    <input type="text" id="userInput" placeholder="Ask a question..." autocomplete="off" />
+    <button type="submit" class="send" id="sendBtn">Send</button>
+  </form>
+</div>
+
+<script>
+/* ---------------------------------------------------------
+   1. FAQ DATA — collected Q/A pairs (the "knowledge base")
+--------------------------------------------------------- */
+const FAQ = [
+  { q: "How do I reset my password?", a: "Go to Settings > Security > Reset Password. We'll email you a reset link that's valid for 30 minutes." },
+  { q: "What payment methods do you accept?", a: "We accept Visa, Mastercard, American Express, and PayPal. Bank transfers are available for annual plans." },
+  { q: "How can I cancel my subscription?", a: "Open Settings > Billing > Cancel Plan. Your access continues until the end of the current billing period." },
+  { q: "Do you offer a free trial?", a: "Yes — every plan includes a 14-day free trial, no credit card required to start." },
+  { q: "How do I contact customer support?", a: "You can reach us via this chat, email at support@example.com, or through the contact form on our site, 24/7." },
+  { q: "Is my data secure and encrypted?", a: "All data is encrypted in transit with TLS 1.3 and at rest with AES-256. We undergo annual third-party security audits." },
+  { q: "Can I upgrade or downgrade my plan?", a: "Yes, anytime from Settings > Billing > Change Plan. Upgrades are immediate; downgrades apply at the next billing cycle." },
+  { q: "Do you have a mobile app?", a: "Yes, our app is available on both the iOS App Store and Google Play Store, with full feature parity to the web app." },
+  { q: "What is your refund policy?", a: "We offer a full refund within 30 days of purchase if you're not satisfied. Just contact support with your order number." },
+  { q: "How do I invite team members?", a: "Go to Settings > Team > Invite Member, enter their email, and choose a role (Admin, Editor, or Viewer)." },
+  { q: "Can I export my data?", a: "Yes, go to Settings > Data > Export. You can download everything as CSV or JSON at any time." },
+  { q: "Why was my account suspended?", a: "Accounts are typically suspended for billing failures or Terms of Service violations. Contact support to review your case." },
+  { q: "Do you support single sign-on (SSO)?", a: "SSO via SAML and Google Workspace is available on our Business and Enterprise plans." },
+  { q: "How do I change my email address?", a: "Go to Settings > Account > Email, enter the new address, and confirm via the verification link we send you." },
+  { q: "What happens to my data if I cancel?", a: "Your data is retained for 90 days after cancellation in case you want to reactivate, then permanently deleted." }
+];
+
+/* ---------------------------------------------------------
+   2. PREPROCESSING — tokenize, lowercase, strip stopwords/punct
+--------------------------------------------------------- */
+const STOPWORDS = new Set(["a","an","the","is","are","do","does","did","i","my","me","you","your",
+  "to","of","for","in","on","at","and","or","how","what","can","will","be","it","this","that",
+  "with","as","if","there","was","were","have","has","get","go"]);
+
+function preprocess(text){
+  return text
+    .toLowerCase()
+    .replace(/[^\w\s]/g, " ")
+    .split(/\s+/)
+    .filter(w => w && !STOPWORDS.has(w));
+}
+
+// Pre-tokenize the FAQ corpus once at load time
+const corpus = FAQ.map(item => ({
+  ...item,
+  tokens: preprocess(item.q)
+}));
+
+/* ---------------------------------------------------------
+   3. SIMILARITY MATCHING — TF-IDF weighted cosine similarity
+--------------------------------------------------------- */
+// Build vocabulary + document frequency
+const df = {};
+corpus.forEach(doc => {
+  new Set(doc.tokens).forEach(t => { df[t] = (df[t] || 0) + 1; });
+});
+const N = corpus.length;
+function idf(term){ return Math.log((N + 1) / ((df[term] || 0) + 1)) + 1; }
+
+function termFreqVector(tokens){
+  const tf = {};
+  tokens.forEach(t => { tf[t] = (tf[t] || 0) + 1; });
+  return tf;
+}
+
+function tfidfVector(tokens){
+  const tf = termFreqVector(tokens);
+  const vec = {};
+  Object.keys(tf).forEach(term => {
+    vec[term] = tf[term] * idf(term);
+  });
+  return vec;
+}
+
+function cosineSim(vecA, vecB){
+  let dot = 0, magA = 0, magB = 0;
+  const allTerms = new Set([...Object.keys(vecA), ...Object.keys(vecB)]);
+  allTerms.forEach(term => {
+    const a = vecA[term] || 0, b = vecB[term] || 0;
+    dot += a * b;
+    magA += a * a;
+    magB += b * b;
+  });
+  if (magA === 0 || magB === 0) return 0;
+  return dot / (Math.sqrt(magA) * Math.sqrt(magB));
+}
+
+// Precompute FAQ vectors
+corpus.forEach(doc => { doc.vector = tfidfVector(doc.tokens); });
+
+/* Simple intent shortcuts for greetings / thanks / fallback */
+const INTENTS = [
+  { name: "greeting", patterns: ["hi","hello","hey","yo","sup"], response: "Hello! 👋 I'm the FAQ bot — ask me anything about your account, billing, or security." },
+  { name: "thanks", patterns: ["thanks","thank you","appreciate","cheers"], response: "You're welcome! Anything else I can help with?" },
+  { name: "bye", patterns: ["bye","goodbye","see you","later"], response: "Take care! Come back anytime you have a question." }
+];
+
+function matchIntent(tokens){
+  const joined = tokens.join(" ");
+  for (const intent of INTENTS){
+    if (intent.patterns.some(p => joined.includes(p) || tokens.includes(p))) return intent;
+  }
+  return null;
+}
+
+/* ---------------------------------------------------------
+   4. RESPONSE GENERATION
+--------------------------------------------------------- */
+function getResponse(userText){
+  const tokens = preprocess(userText);
+
+  if (tokens.length === 0){
+    return { answer: "Could you rephrase that? I didn't quite catch a question there.", confidence: 0, matched: null };
+  }
+
+  const intent = matchIntent(tokens);
+  if (intent) return { answer: intent.response, confidence: 1, matched: null, isIntent: true };
+
+  const queryVec = tfidfVector(tokens);
+  let best = null, bestScore = 0;
+  corpus.forEach(doc => {
+    const score = cosineSim(queryVec, doc.vector);
+    if (score > bestScore){ bestScore = score; best = doc; }
+  });
+
+  if (best && bestScore >= 0.35){
+    return { answer: best.a, confidence: bestScore, matched: best.q };
+  }
+  if (best && bestScore >= 0.15){
+    return {
+      answer: `I'm not fully sure, but this might help:\n\n"${best.a}"`,
+      confidence: bestScore,
+      matched: best.q,
+      uncertain: true
+    };
+  }
+  return {
+    answer: "I couldn't find a confident match for that in our FAQs. Try rephrasing, or contact support@example.com for direct help.",
+    confidence: bestScore,
+    matched: null
+  };
+}
+
+/* ---------------------------------------------------------
+   5. CHAT INTERFACE
+--------------------------------------------------------- */
+const messagesEl = document.getElementById('messages');
+const form = document.getElementById('chatForm');
+const input = document.getElementById('userInput');
+const sendBtn = document.getElementById('sendBtn');
+
+function addMessage(text, sender, confidence){
+  const div = document.createElement('div');
+  div.className = `msg ${sender}`;
+  div.textContent = text;
+  if (sender === 'bot' && typeof confidence === 'number' && confidence > 0){
+    const conf = document.createElement('span');
+    conf.className = 'conf';
+    conf.textContent = `match confidence: ${(confidence*100).toFixed(0)}%`;
+    div.appendChild(conf);
+  }
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function addSuggestions(){
+  const wrap = document.createElement('div');
+  wrap.className = 'suggestions';
+  const picks = [...FAQ].sort(()=>Math.random()-0.5).slice(0,3);
+  picks.forEach(item => {
+    const chip = document.createElement('button');
+    chip.type = 'button';
+    chip.className = 'chip';
+    chip.textContent = item.q;
+    chip.onclick = () => { input.value = item.q; form.requestSubmit(); };
+    wrap.appendChild(chip);
+  });
+  messagesEl.appendChild(wrap);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function showTyping(){
+  const div = document.createElement('div');
+  div.className = 'typing';
+  div.id = 'typingIndicator';
+  div.innerHTML = '<span></span><span></span><span></span>';
+  messagesEl.appendChild(div);
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+function hideTyping(){
+  const el = document.getElementById('typingIndicator');
+  if (el) el.remove();
+}
+
+form.addEventListener('submit', (e)=>{
+  e.preventDefault();
+  const text = input.value.trim();
+  if (!text) return;
+  addMessage(text, 'user');
+  input.value = '';
+  sendBtn.disabled = true;
+
+  showTyping();
+  setTimeout(()=>{
+    hideTyping();
+    const result = getResponse(text);
+    addMessage(result.answer, 'bot', result.isIntent ? 0 : result.confidence);
+    sendBtn.disabled = false;
+    input.focus();
+  }, 500 + Math.random()*400);
+});
+
+// Welcome message + starter suggestions
+addMessage("Hi there! I'm an FAQ assistant trained on our help docs. Ask me about billing, security, accounts, or anything else.", 'bot');
+addSuggestions();
+input.focus();
+</script>
+</body>
+</html>
